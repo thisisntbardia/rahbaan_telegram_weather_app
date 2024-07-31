@@ -1,4 +1,5 @@
-API_TOKEN = "telegram Token"                       
-api_key = "any weather app API"                    
-base_url = "https://youraddress"    
-phone_number = "+123456789"
+API_TOKEN = "bot token"
+api_key = "12423534"                    #OpenWeathermap API
+base_url = "https://weather"    
+phone_number = "+98123456789"
+channel_id = "@id"
