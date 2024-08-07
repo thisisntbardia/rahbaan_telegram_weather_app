@@ -20,9 +20,9 @@ bot = telebot.TeleBot(API_TOKEN)
 # Function to return about us text based on the language
 def about_us(user_preferred):    #about us text
     if(user_preferred):
-        return "این ربات در جهت گزارش لحظه ای اب و هوای منطقه شما ساخته شده است.\nکلیه حقوق این سامانه متعلق به شرکت  x می باشد."
+        return "این ربات در جهت گزارش لحظه ای اب و هوای منطقه شما ساخته شده است.\nکلیه حقوق این سامانه متعلق به شرکت X می باشد."
     else:
-        return "This robot is designed to report the current weather of your area.\nAll rights of this system are reserved by x Company. "
+        return "This robot is designed to report the current weather of your area.\nAll rights of this system are reserved by X Company. "
 
 # Function checks if user is a member of the channel
 def check_user_membership(user_id: int, channel_id: str):
@@ -61,7 +61,7 @@ def settings_keyboard_language(key_language):          #settings option keyboard
         language_change =types.KeyboardButton("زبان/language")  # Button to change language
         daily_schedule =types.KeyboardButton("daily schedule")  # Button to enable/disable daily updates
         settings_keyboard.add(language_change , daily_schedule)
-        return settings_keyboard  
+        return settings_keyboard
 
 # Function to return main keyboard based on the language
 def keyboard_language(key_language):                   #main keyboard
@@ -93,6 +93,11 @@ def check_schedule():  # Function to check if daily updates are enabled and call
 # Function to send daily weather report to all users
 def daily_weather_update():                            #send daily wather report
     for user_id, location in user_locations.items():
+        if user_id not in user_locations:
+            user_locations[user_id] = None  # Initialize user location to None
+            return
+        if user_id not in user_language:
+           user_language[user_id] = 1
         result = check_user_membership(user_id, channel_id)
         if result == True:
             if location:
@@ -129,41 +134,41 @@ def format_weather_data(weather_data , user_preferred):
         formatted_data = f"""
     سلام! این به‌روزرسانی وضعیت آب و هوا برای {weather_data['name']}, {weather_data['sys']['country']} است:
 
-    مختصات: 
+    مختصات:
         عرض جغرافیایی: {weather_data['coord']['lat']}
         طول جغرافیایی: {weather_data['coord']['lon']}
-    
-    دما: 
+
+    دما:
         فعلی: {weather_data['main']['temp']} سانتی گراد
         احساس می‌شود: {weather_data['main']['feels_like']} سانتی گراد
         حداقل: {weather_data['main']['temp_min']} سانتی گراد
         حداکثر: {weather_data['main']['temp_max']} سانتی گراد
 
-    فشار: 
+    فشار:
         سطح دریا: {weather_data['main']['sea_level']} هکتوپاسکال
         سطح زمین: {weather_data['main']['grnd_level']} هکتوپاسکال
 
-    رطوبت: 
+    رطوبت:
         مقدار: {weather_data['main']['humidity']}%
 
-    دید: 
+    دید:
         مقدار: {weather_data['visibility']} متر
 
-    باد: 
+    باد:
         سرعت: {weather_data['wind']['speed']} متر بر ثانیه
         جهت: {weather_data['wind']['deg']}°
 
-    ابرها: 
+    ابرها:
         مقدار: {weather_data['clouds']['all']}%
 
-    زمان طلوع و غروب خورشید: 
+    زمان طلوع و غروب خورشید:
         طلوع خورشید: {datetime.datetime.fromtimestamp(weather_data['sys']['sunrise']).strftime('%H:%M:%S')}
         غروب خورشید: {datetime.datetime.fromtimestamp(weather_data['sys']['sunset']).strftime('%H:%M:%S')}
 
-    منطقه زمانی: 
+    منطقه زمانی:
         مقدار: GMT{weather_data['timezone']//3600}:{(weather_data['timezone']%3600)//60}
 
-    زمان داده: 
+    زمان داده:
         مقدار: {datetime.datetime.fromtimestamp(weather_data['dt']).strftime('%Y-%m-%d %H:%M:%S')}
 
 موفق و سلامت باشید!
@@ -172,43 +177,43 @@ def format_weather_data(weather_data , user_preferred):
         formatted_data = f"""
     Hello! Here is your weather update for {weather_data['name']}, {weather_data['sys']['country']}:
 
-    Coordinates: 
+    Coordinates:
         Latitude: {weather_data['coord']['lat']}
         Longitude: {weather_data['coord']['lon']}
-    
+
 The sky looks clear today with {weather_data['weather'][0]['description']}.
 
-    Temperature: 
+    Temperature:
         Current: {weather_data['main']['temp']} C
         Feels Like: {weather_data['main']['feels_like']} C
         Minimum: {weather_data['main']['temp_min']} C
         Maximum: {weather_data['main']['temp_max']} C
 
-    Pressure: 
+    Pressure:
         Sea Level: {weather_data['main']['sea_level']} hPa
         Ground Level: {weather_data['main']['grnd_level']} hPa
 
-    Humidity: 
+    Humidity:
         Value: {weather_data['main']['humidity']}%
 
-    Visibility: 
+    Visibility:
         Value: {weather_data['visibility']} meters
 
-    Wind: 
+    Wind:
         Speed: {weather_data['wind']['speed']} m/s
         Direction: {weather_data['wind']['deg']}°
 
-    Clouds: 
+    Clouds:
         Value: {weather_data['clouds']['all']}%
 
-    Sunrise and Sunset times: 
+    Sunrise and Sunset times:
         Sunrise at: {datetime.datetime.fromtimestamp(weather_data['sys']['sunrise']).strftime('%H:%M:%S')}
         Sunset at: {datetime.datetime.fromtimestamp(weather_data['sys']['sunset']).strftime('%H:%M:%S')}
 
-    Timezone: 
+    Timezone:
         Value: GMT{weather_data['timezone']//3600}:{(weather_data['timezone']%3600)//60}
 
-    Data Time: 
+    Data Time:
         Value: {datetime.datetime.fromtimestamp(weather_data['dt']).strftime('%Y-%m-%d %H:%M:%S')}
 
 Stay safe and have a great day!
@@ -230,7 +235,7 @@ def start(message):
         # Check the current language and send the appropriate welcome message
         if(language):
             bot.send_message(user_id, f"به برنامه ما خوش امدی {message.from_user.first_name}!\nما به صورت روزانه وضعیت اب و هوایی منطقه شما را ارسال میکنیم" , reply_markup=keyboard_language(user_language[user_id]))
-        else: 
+        else:
             bot.send_message(user_id, f"Welcome to our Weather App, {message.from_user.first_name}!\n{location_channel_msg}{send_location}" , reply_markup = keyboard_language(user_language[user_id]))
     elif result == False:
         bot.send_message(user_id , "لطفا جهت استفاده از ربات عضو کانال تلگرام ما شوید\nادرس کانال تلگرام:  @rahbaan_ir")
@@ -241,6 +246,11 @@ def start(message):
 @bot.message_handler(content_types=["location"])
 def handle_location(message):
     user_id = message.from_user.id  # Get the user ID
+    if user_id not in user_locations:
+        user_locations[user_id] = None  # Initialize user location to None
+
+    if user_id not in user_language:
+        user_language[user_id] = 1
     result = check_user_membership(user_id, channel_id)
     if result == True:
         latitude = message.location.latitude    # Get the latitude from the location
@@ -302,6 +312,11 @@ def handel_about_us(message):
 @bot.message_handler(func=lambda message: message.text.lower() in ["contact us" , "تماس با ما"])
 def handel_contact_us(message):
     user_id = message.from_user.id  # Get the user ID
+    if user_id not in user_locations:
+        user_locations[user_id] = None  # Initialize user location to None
+
+    if user_id not in user_language:
+        user_language[user_id] = 1
     # Create a clickable phone number link
     tap = f'<a href="tel:{phone_number}">{phone_number}</a>'
     # Check the current language and send the appropriate message
@@ -325,7 +340,7 @@ def shandel_settings(message):
         bot.send_message(user_id , "لطفا جهت استفاده از ربات عضو کانال تلگرام ما شوید\nادرس کانال تلگرام:  @rahbaan_ir")
     else :
         bot.send_message(user_id , result)
- 
+
 # Handler for language change requests
 @bot.message_handler(func=lambda message: message.text.lower() in ["زبان/language"])
 def handel_language(message):
@@ -348,12 +363,18 @@ def handel_language(message):
 # Handler for daily schedule on/off
 @bot.message_handler(func=lambda message: message.text.lower() in ["ارسال روزانه" , "daily schedule"])
 def handel_schedule(message):
-    global Repetition       # Access the global variable repeation
     user_id = message.from_user.id  # Get the user ID
+    if user_id not in user_locations:
+        user_locations[user_id] = None
+        bot.reply_to(message, send_location)  # Ask for location if not provided
+        return
+    if user_id not in user_language:
+        user_language[user_id] = 1
+    global Repetition       # Access the global variable repeation
     result = check_user_membership(user_id, channel_id)
     if result == True:
         # Check the current state of repeation
-        if Repetition == 1:      
+        if Repetition == 1:
             Repetition = 0      # If repeation is 1, set it to 0
             # Send a message to the user with the daily_repeation_text and the keyboard language
             bot.send_message(user_id , f"{daily_Repetition_text()}" , reply_markup = keyboard_language(user_language[user_id]))
