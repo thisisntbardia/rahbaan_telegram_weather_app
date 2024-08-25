@@ -8,6 +8,7 @@ import threading
 import requests
 from telebot import types
 from confing import API_TOKEN  , api_key , base_url , phone_number , channel_id
+log_admin = 12345   #admin id
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')  # Added logging configuration
 # Initialize the bot
@@ -67,7 +68,7 @@ def set_phone(user_id, message, var, lang):
         ''', (user_id,))
         result = cursor.fetchone()
         
-        if not result:
+        if result is None:
             set_user_info(user_id, message, var, lang)
 
         cursor.execute('''
@@ -81,6 +82,7 @@ def set_phone(user_id, message, var, lang):
 
     except sqlite3.Error as e:
         logging.error(f"An error occurred while setting phone number: {e}")  # Logging the error
+        bot.send_message(log_admin , f"An error occurred in set user info:\n {e}")
 
     finally:
         # Ensure the cursor and connection are closed
@@ -94,7 +96,7 @@ def user_log(user_id , message , weather_data = None):
     try:
         conn = sqlite3.connect('user_data.db')
         cursor = conn.cursor()
-        if not weather_data:
+        if weather_data is None:
             # Insert data into user_log
             cursor.execute('''
                 INSERT INTO user_log
@@ -110,11 +112,12 @@ def user_log(user_id , message , weather_data = None):
                 (user_id, user_name ,chat_id, chat_type, message_id, message_content, date_time, first_name, last_name , country , city)
                 VALUES
                 (? , ? , ? , ? , ? , ?, ? , ? , ? , ? , ?)
-            ''', (user_id, message.from_user.username ,message.chat.id, message.chat.type, message.message_id, message.text,  datetime.datetime.fromtimestamp(message.date).strftime('%Y-%m-%d %H:%M:%S') , message.from_user.first_name, message.from_user.last_name , weather_data['name'], weather_data['sys']['country']))
+            ''', (user_id, message.from_user.username ,message.chat.id, message.chat.type, message.message_id, message.text,  datetime.datetime.fromtimestamp(message.date).strftime('%Y-%m-%d %H:%M:%S') , message.from_user.first_name, message.from_user.last_name , weather_data['sys']['country'], weather_data['name']))
             conn.commit()
 
     except sqlite3.Error as e:
         logging.error(f"An error occurred while setting data to log table: {e}")  # Logging the error
+        bot.send_message(log_admin , f"An error occurred in set_phone:\n {e}")
 
     finally:
         # Ensure the connection is closed
@@ -176,7 +179,7 @@ def set_user_info(user_id, message , var , lang):
             WHERE user_id = ?        
         ''', (user_id,))
         result = cursor.fetchone()
-
+        print(result)
         if result:
             # User exists, update location if message contains location data
             if hasattr(message, 'location') and message.location is not None:
@@ -188,7 +191,7 @@ def set_user_info(user_id, message , var , lang):
                     WHERE user_id = ?
                 ''', (longitude, latitude, user_id))
                 conn.commit()
-        else:
+        elif result is None:
             # User does not exist, insert data into user_information
             if hasattr(message, 'location') and message.location is not None:
                 longitude = message.location.longitude
@@ -204,12 +207,11 @@ def set_user_info(user_id, message , var , lang):
                 (?, ?, ?, ?, ?)
             ''', (user_id, longitude, latitude, var , lang))
             conn.commit()
-
-
-
     except sqlite3.Error as e:
         logging.error(f"An error occurred in the set_user)info handler: {e}")  # Logging the error
         print(f"An error occurred: {e}")
+        bot.send_message(log_admin , f"An error occurred in set user info:\n {e}")
+
     finally:
         if conn:
             conn.close()
@@ -225,9 +227,11 @@ def get_weather(user_id):
         # Check if the location exists in the database
         cursor.execute('SELECT latitude, longitude FROM user_information WHERE user_id = ?', (user_id,))
         result_location_exist = cursor.fetchone()
-        
-        if result_location_exist[0] is None:
+
+        if result_location_exist is None:
             return False  # Location does not exist
+        elif result_location_exist[0] is None or result_location_exist[1] is None:
+            return False  #Location does not exist
 
         # Extract latitude and longitude
         latitude, longitude = result_location_exist
@@ -238,12 +242,11 @@ def get_weather(user_id):
         # Send a request to the weather API
         response = requests.get(base_url, params=params)
         data = response.json()  # Get the response data
-
         return data  # Return the result from the API
 
     except sqlite3.Error as e:
         logging.error(f"An error occurred in the def get_weather function: {e}")  # Logging the error
-
+        bot.send_message(log_admin , f"An error occurred in get weather:\n {e}")
         print(f"An error occurred: {e}")
         return None
 
@@ -265,8 +268,8 @@ def check_language(user_id, message):
             WHERE user_id = ?        
         ''', (user_id,))
         result = cursor.fetchone()
-
-        if not result:
+        
+        if result is None:
             set_user_info(user_id, message , 1 ,1)
 
         cursor.execute('''
@@ -275,12 +278,22 @@ def check_language(user_id, message):
             WHERE user_id = ?
         ''', (user_id,))
 
-        user_language = cursor.fetchone()
-        return user_language[0]  # Return the actual language
+        user_language = cursor.fetchone()[0]
+        if user_language == None:
+            cursor.execute('''
+                update user_information
+                set preferred_language = ?
+                WHERE user_id = ?
+            ''', (1 , user_id))
+            conn.commit()
+            user_language = 1
+        return user_language  # Return the actual language
 
     except sqlite3.Error as e:
         logging.error(f"An error occurred in the check_language function: {e}")  # Logging the error
         print(f"An error occurred: {e}")
+        bot.send_message(log_admin , f"An error occurred in check language:\n {e}")
+
         return None
 
     finally:
@@ -302,7 +315,7 @@ def check_var(user_id, message):
         ''', (user_id,))
         result = cursor.fetchone()
 
-        if not result:
+        if result is None:
             set_user_info(user_id, message , 1 ,1)
 
         cursor.execute('''
@@ -317,6 +330,8 @@ def check_var(user_id, message):
     except sqlite3.Error as e:
         logging.error(f"An error occurred in the schedule_var checking function: {e}")  # Logging the error
         print(f"An error occurred: {e}")
+        bot.send_message(log_admin , f"An error occurred in schedule_var:\n {e}")
+
         return None
 
     finally:
@@ -326,7 +341,7 @@ def check_var(user_id, message):
 # Function to return about us text based on the language
 def about_us(user_preferred):    # About us text
     if user_preferred:
-        return "🤖 این ربات برای گزارش لحظه‌ای آب و هوای منطقه شما ساخته شده است. 🌦️\nکلیه حقوق این سامانه متعلق به شرکت x رایان می‌باشد. 🏢"
+        return "🤖 این ربات برای گزارش لحظه‌ای آب و هوای منطقه شما ساخته شده است. 🌦️\nکلیه حقوق این سامانه متعلق به شرکت x می‌باشد. 🏢"
     else:
         return "🤖 This robot is designed to report the current weather of your area. 🌦️\nAll rights of this system are reserved by x Company. 🏢"
 
@@ -339,6 +354,7 @@ def check_user_membership(user_id: int, channel_id: str):
         else:
             return False    # User is not a member of the channel
     except Exception as e:
+        bot.send_message(log_admin , f"An error occurred in check membership:\n {e}")
         return f'Error: {e}'    # If an error occurs
 
 # Function to return schedule text based on the language and repeation
@@ -374,7 +390,7 @@ def keyboard_language(key_language):                   #main keyboard
     #  farsi is 1  ,  english is 0
     if(key_language):
         keyboard = types.ReplyKeyboardMarkup(row_width=2, resize_keyboard=True)
-        button_weather = types.KeyboardButton("اب و هوا") # Button to request weather
+        button_weather = types.KeyboardButton("آب و هوا") # Button to request weather
         contact_us = types.KeyboardButton("تماس با ما" , request_contact=True)  # Button to contact us
         about_us = types.KeyboardButton("درباره ما")  # Button to learn about us
         settings = types.KeyboardButton("تنظیمات")  # Button to access settings
@@ -405,39 +421,48 @@ def check_schedule():
         for row in rows:
             user_id, longitude, latitude, schedule_var, preferred_language = row
             if schedule_var == 1:
-                location = (longitude, latitude)
+                location = (latitude , longitude)
                 daily_weather_update(user_id, location, preferred_language)
     except sqlite3.Error as e:
         logging.error(f"An error occurred while checking schedule: {e}")  # Logging the error
+        bot.send_message(log_admin , f"An error occurred while checking schedule: {e}")
     finally:
         if conn:
             conn.close()
 
 def daily_weather_update(user_id, location, preferred_language):
-    result = check_user_membership(user_id, channel_id)
-    if result is True:
-        if location and location[0] is not None and location[1] is not None:
-            latitude, longitude = location
-            params = {"lat": latitude, "lon": longitude, "appid": api_key, "units": "metric"}
-            response = requests.get(base_url, params=params)
-            data = response.json()
-            if "main" in data:
-                weather_info = format_weather_data(data, preferred_language)
-                bot.send_message(user_id, weather_info)
+    try:
+        result = check_user_membership(user_id, channel_id)
+        if result is True:
+            if location[0] is not None and location[1] is not None:
+                latitude, longitude = location
+                params = {"lat": latitude, "lon": longitude, "appid": api_key, "units": "metric"}
+                response = requests.get(base_url, params=params)
+                data = response.json()
+                if "main" in data:
+                    weather_info = format_weather_data(data, preferred_language)
+                    bot.send_message(user_id, weather_info)
+                else:
+                    bot.send_message(user_id, "City Not Found")
             else:
-                bot.send_message(user_id, "City Not Found")
+                bot.send_message(user_id, "Location data is missing or invalid please send your location or you can turn off daily schedule.")
+        elif result is False:
+            bot.send_message(user_id, "لطفا جهت استفاده از ربات عضو کانال تلگرام ما شوید\nادرس کانال تلگرام:  @x")
         else:
-            bot.send_message(user_id, "Location data is missing or invalid.")
-    elif result is False:
-        bot.send_message(user_id, "لطفا جهت استفاده از ربات عضو کانال تلگرام ما شوید\nادرس کانال تلگرام:  @rahbaan_ir")
-    else:
-        bot.send_message(user_id, result)
-
+            bot.send_message(user_id, result)
+    except Exception as e:
+            logging.error(f"An error occurred in the daily weather update: {e}")  # Logging the error
+            bot.send_message(log_admin , f"An error occurred in the daily weather update: {e}")
+            
 # Function to run schedule
 def reo():                                             #running schedule
-    while True:
-        schedule.run_pending()
-        time.sleep(1)
+    try:    
+        while True:
+            schedule.run_pending()
+            time.sleep(1)
+    except Exception as e:
+        logging.error(f"An error occurred in the reo: {e}")  # Logging the error
+        bot.send_message(log_admin , f"An error occurred in the reo: {e}")
 
 #start keyboard
 start_keyboard = types.ReplyKeyboardMarkup(row_width=1, resize_keyboard=True)
@@ -446,7 +471,6 @@ start_button = types.KeyboardButton("/start")
 # Add the button to the keyboard
 start_keyboard.add(start_button)
 
-# Function to format weather data into a readable string
 # Function to format weather data into a readable string
 def format_weather_data(weather_data, user_preferred):
     if user_preferred:
@@ -573,8 +597,9 @@ def start(message):
         except Exception as e:
             logging.error(f"An error occurred in the /start handler: {e}")  # Logging the error
             bot.send_message(user_id, "An error occurred while processing your request.")
+            bot.send_message(log_admin , f"An error occurred in start:\n {e}")
     elif result is False:
-        bot.send_message(user_id, "لطفا جهت استفاده از ربات عضو کانال تلگرام ما شوید\nادرس کانال تلگرام:  @rahbaan_ir")
+        bot.send_message(user_id, "لطفا جهت استفاده از ربات عضو کانال تلگرام ما شوید\nادرس کانال تلگرام:  @x")
     else:
         bot.send_message(user_id, result)
 
@@ -595,6 +620,8 @@ def handle_location(message):
                 bot.reply_to(message, "Please type 'weather' for today's details.")
         except Exception as e:
             logging.error(f"An error occurred in the location handler: {e}")  # Logging the error
+            bot.send_message(log_admin , f"An error occurred in location:\n {e}")
+
             bot.send_message(user_id, "An error occurred while processing your location.")
     elif result is False:
         bot.send_message(user_id, "لطفا جهت استفاده از ربات عضو کانال تلگرام ما شوید\nادرس کانال تلگرام:  @x")
@@ -602,7 +629,7 @@ def handle_location(message):
         bot.send_message(user_id, result)
 
 # Handler for weather forecast requests
-@bot.message_handler(func=lambda message: message.text.lower() in ["weather", "اب و هوا"])
+@bot.message_handler(func=lambda message: message.text.lower() in ["weather", "آب و هوا"])
 def handle_weather_forecast(message):
     user_id = message.from_user.id  # Get the user ID
     result = check_user_membership(user_id, channel_id)
@@ -627,6 +654,7 @@ def handle_weather_forecast(message):
                     bot.reply_to(message, "City Not Found")  # Handle case where city is not found
         except Exception as e:
             logging.error(f"An error occurred in the weather forecast handler: {e}")  # Logging the error
+            bot.send_message(log_admin , f"An error occurred in the weather forecast handler: {e}")
             bot.reply_to(message, "An error occurred while processing your request.")
     elif result is False:
         bot.send_message(user_id, "لطفا جهت استفاده از ربات عضو کانال تلگرام ما شوید\nادرس کانال تلگرام:  @x")
@@ -646,6 +674,7 @@ def handel_about_us(message):
             bot.reply_to(message, info)
         except Exception as e:
             logging.error(f"An error occurred in the about_us handler: {e}")  # Logging the error
+            bot.send_message(log_admin , f"An error occurred in about us:\n {e}")
             bot.reply_to(message, "An error occurred while processing your request.")
     elif result is False:
         bot.send_message(user_id, "لطفا جهت استفاده از ربات عضو کانال تلگرام ما شوید\nادرس کانال تلگرام:  @x")
@@ -679,6 +708,7 @@ def handel_contact_us(message):
             bot.reply_to(message, contact_message, parse_mode='HTML')
     except Exception as e:
         logging.error(f"An error occurred in the contact_us handler: {e}")  # Logging the error
+        bot.send_message(log_admin , f"An error occurred in contact us:\n {e}")
         bot.reply_to(message, "An error occurred while processing your request.")
 
 # Handler for 'settings' requests
@@ -706,47 +736,54 @@ def handel_settings(message):
                 bot.send_message(user_id, settings_message, reply_markup=settings_keyboard_language(preferred_language))
         except Exception as e:
             logging.error(f"An error occurred in the settings handler: {e}")  # Logging the error
+            bot.send_message(log_admin , f"An error occurred in setting handler:\n {e}")
             bot.send_message(user_id, "An error occurred while processing your request.")
     elif result is False:
-        bot.send_message(user_id, "لطفا جهت استفاده از ربات عضو کانال تلگرام ما شوید\nادرس کانال تلگرام:  @rahbaan_ir")
+        bot.send_message(user_id, "لطفا جهت استفاده از ربات عضو کانال تلگرام ما شوید\nادرس کانال تلگرام:  @x")
     else:
         bot.send_message(user_id, result)
 
 # Handler for language change requests
 @bot.message_handler(func=lambda message: message.text.lower() in ["زبان/language"])
 def handel_language(message):
-    user_id = message.from_user.id  # Get the user ID
-    result = check_user_membership(user_id, channel_id)
-    if result is True:
-        preferred_language = check_language(user_id, message)
-        schedule_var = check_var(user_id , message)
-        message_text = change_language(user_id , message , schedule_var , preferred_language )
-        user_log(user_id , message)
-        preferred_language = check_language(user_id , message)
-        bot.send_message(user_id, message_text, reply_markup=keyboard_language(preferred_language))
-    elif result is False:
-        bot.send_message(user_id, "لطفا جهت استفاده از ربات عضو کانال تلگرام ما شوید\nادرس کانال تلگرام:  @rahbaan_ir")
-    else:
-        bot.send_message(user_id, result)
+    try:
+        user_id = message.from_user.id  # Get the user ID
+        result = check_user_membership(user_id, channel_id)
+        if result is True:
+            preferred_language = check_language(user_id, message)
+            schedule_var = check_var(user_id , message)
+            message_text = change_language(user_id , message , schedule_var , preferred_language )
+            user_log(user_id , message)
+            preferred_language = check_language(user_id , message)
+            bot.send_message(user_id, message_text, reply_markup=keyboard_language(preferred_language))
+        elif result is False:
+            bot.send_message(user_id, "لطفا جهت استفاده از ربات عضو کانال تلگرام ما شوید\nادرس کانال تلگرام:  @x")
+        else:
+            bot.send_message(user_id, result)
+    except Exception as e:
+        bot.send_message(log_admin , f"An error occurred in language:\n {e}")
 
 # Handler for language change requests
 @bot.message_handler(func=lambda message: message.text.lower() in ["ارسال روزانه", "daily schedule"])
 def handel_schedule(message):
-    user_id = message.from_user.id  # Get the user ID
-    result = check_user_membership(user_id, channel_id)
-    if result is True:
-        schedule_var = check_var(user_id , message)
-        preferred_language = check_language(user_id, message )
-        message_text = change_schedule_var(user_id , message , schedule_var , preferred_language)
-        user_log(user_id , message)
-        status = 1 if "enabled" in message_text else 0
-        bot.send_message(user_id, f"{daily_Repetition_text(preferred_language, status)}", reply_markup=keyboard_language(preferred_language))
-    elif result is False:
-        bot.send_message(user_id, "لطفا جهت استفاده از ربات عضو کانال تلگرام ما شوید\nادرس کانال تلگرام:  @rahbaan_ir")
-    else:
-        bot.send_message(user_id, result)
+    try:
+        user_id = message.from_user.id  # Get the user ID
+        result = check_user_membership(user_id, channel_id)
+        if result is True:
+            schedule_var = check_var(user_id , message)
+            preferred_language = check_language(user_id, message )
+            message_text = change_schedule_var(user_id , message , schedule_var , preferred_language)
+            user_log(user_id , message)
+            status = 1 if "enabled" in message_text else 0
+            bot.send_message(user_id, f"{daily_Repetition_text(preferred_language, status)}", reply_markup=keyboard_language(preferred_language))
+        elif result is False:
+            bot.send_message(user_id, "لطفا جهت استفاده از ربات عضو کانال تلگرام ما شوید\nادرس کانال تلگرام:  @x")
+        else:
+            bot.send_message(user_id, result)
+    except Exception as e:
+        bot.send_message(log_admin , f"An error occurred in daily schedul:\n {e}")
 
-schedule.every().day.at("11:30").do(check_schedule)
+schedule.every().day.at("08:00").do(check_schedule)
 
 # Start a new thread that runs the reo function
 threading.Thread(target=reo).start()
